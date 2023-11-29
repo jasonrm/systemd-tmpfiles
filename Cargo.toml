@@ -1,0 +1,13 @@
+[package]
+name = "systemd-tmpfile-rs"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1"
+clap = { version = "4", features = ["derive", "env"] }
+env_logger = "0.10"
+serde = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+humantime = "2"
