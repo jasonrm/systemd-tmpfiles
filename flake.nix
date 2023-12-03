@@ -50,6 +50,7 @@
           packages = with pkgs; [
             bashInteractive
             rustfmt
+            cargo-flamegraph
           ] ++ (lib.optionals stdenv.isDarwin (with pkgs; with darwin.apple_sdk.frameworks; [
             iconv
             Security
