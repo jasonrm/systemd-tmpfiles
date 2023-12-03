@@ -21,12 +21,12 @@ pub enum Modifier {
 pub struct Entry {
     line_type: LineType,
     modifiers: Vec<Modifier>,
-    path: String,
+    path: Box<str>,
     mode: Option<Mode>,
-    user: Option<String>,
-    group: Option<String>,
-    age: Option<String>,
-    argument: Option<String>,
+    user: Option<Box<str>>,
+    group: Option<Box<str>>,
+    age: Option<Box<str>>,
+    argument: Option<Box<str>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -53,7 +53,7 @@ fn parse_line(line: &str) -> Entry {
     let mut entry = Entry {
         line_type: Unsupported('-'),
         modifiers: Vec::new(),
-        path: String::new(),
+        path: Box::from(""),
         mode: None,
         user: None,
         group: None,
@@ -91,7 +91,7 @@ fn parse_line(line: &str) -> Entry {
                 if c == ' ' || c == '\'' {
                     if (c == '\'' && inside_quotes) || (start_index > 0 && !inside_quotes) {
                         state = State::Mode;
-                        entry.path.push_str(&line[start_index..i]);
+                        entry.path = Box::from(&line[start_index..i]);
                         start_index = 0;
                         inside_quotes = false;
                     } else if c == '\'' && !inside_quotes {
@@ -124,7 +124,7 @@ fn parse_line(line: &str) -> Entry {
                 if c == ' ' {
                     if start_index > 0 {
                         state = State::Group;
-                        entry.user = Some(line[start_index..i].to_string());
+                        entry.user = Some(Box::from(&line[start_index..i]));
                         start_index = 0;
                     }
                 } else {
@@ -137,7 +137,7 @@ fn parse_line(line: &str) -> Entry {
                 if c == ' ' {
                     if start_index > 0 {
                         state = State::Age;
-                        entry.group = Some(line[start_index..i].to_string());
+                        entry.group = Some(Box::from(&line[start_index..i]));
                         start_index = 0;
                     }
                 } else {
@@ -150,7 +150,7 @@ fn parse_line(line: &str) -> Entry {
                 if c == ' ' {
                     if start_index > 0 {
                         state = State::Argument;
-                        entry.age = Some(line[start_index..i].to_string());
+                        entry.age = Some(Box::from(&line[start_index..i]));
                         start_index = i;
                     }
                 } else {
@@ -163,7 +163,7 @@ fn parse_line(line: &str) -> Entry {
                 if c == '-' {
                     break;
                 } else if c != ' ' {
-                    entry.argument = Some(line[i..].to_string());
+                    entry.argument = Some(Box::from(&line[i..]));
                     break;
                 }
             }

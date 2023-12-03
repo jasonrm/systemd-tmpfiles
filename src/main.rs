@@ -65,13 +65,12 @@ fn entries_from_config_files(config_files: Vec<PathBuf>) -> impl Iterator<Item =
             if let Ok(file) = File::open(&config_file) {
                 let reader = io::BufReader::new(file);
                 Some(reader.lines().filter_map(|line| {
-                    line.ok().and_then(|l| {
-                        let trimmed = l.trim();
-                        if trimmed.is_empty() || trimmed.starts_with('#') {
-                            return None;
-                        }
-                        Some(Entry::from_str(trimmed))
-                    })
+                    let line = line.unwrap();
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() || trimmed.starts_with('#') {
+                        return None;
+                    }
+                    Some(Entry::from_str(trimmed))
                 }))
             } else {
                 None
