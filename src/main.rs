@@ -1,7 +1,9 @@
-use std::path::PathBuf;
-use thiserror::Error;
 use clap::Parser;
-use tracing::{error, info};
+use std::fs::File;
+use std::io::{self, BufRead};
+use std::path::PathBuf;
+use systemd_tmpfile_rs::Entry;
+use tracing::info;
 
 /// Creates, deletes and cleans up volatile and temporary files and directories
 ///
@@ -29,9 +31,14 @@ struct Options {
     #[arg(long)]
     prefix: Vec<PathBuf>,
 
+    /// All paths will be prefixed with the given alternate root path.
+    #[arg(long)]
+    root: Option<PathBuf>,
+
     /// Configuration file.
     ///
-    /// If one or more filenames are passed on the command line, only the directives in these files are applied.
+    /// If one or more filenames are passed on the command line, only the directives in these files
+    /// are applied.
     #[arg()]
     config_file: Vec<PathBuf>,
 }
@@ -42,5 +49,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts = Options::parse();
     info!("opts: {:?}", opts);
 
+    let entries = entries_from_config_files(opts.config_file);
+    for entry in entries {
+        info!("{:?}", entry);
+    }
+
+    info!("Done!");
     Ok(())
+}
+
+fn entries_from_config_files(config_files: Vec<PathBuf>) -> impl Iterator<Item = Entry> {
+    config_files
+        .into_iter()
+        .flat_map(|config_file| {
+            if let Ok(file) = File::open(&config_file) {
+                let reader = io::BufReader::new(file);
+                Some(reader.lines().filter_map(|line| {
+                    line.ok().and_then(|l| {
+                        let trimmed = l.trim();
+                        if trimmed.is_empty() || trimmed.starts_with('#') {
+                            return None;
+                        }
+                        Some(Entry::from_str(trimmed))
+                    })
+                }))
+            } else {
+                None
+            }
+        })
+        .flatten()
 }

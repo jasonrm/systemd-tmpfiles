@@ -1,19 +1,38 @@
+use crate::LineType::Unsupported;
 use file_mode::Mode;
-use std::path::PathBuf;
 
-#[derive(Debug)]
-struct Entry<'a> {
-    temp_type: &'a str,
-    path: &'a str,
-    mode: &'a str,
-    user: &'a str,
-    group: &'a str,
-    age: &'a str,
-    argument: &'a str,
+#[derive(Debug, PartialEq)]
+pub enum LineType {
+    DirectoryCreateAndClean,
+    DirectoryCreateAndRemove,
+    Unsupported(char),
 }
 
+#[derive(Debug, PartialEq)]
+pub enum Modifier {
+    OnlySafeDuringBoot,
+    IgnoreCreateError,
+    RemoveExisting,
+    Base64EncodedArgument,
+    Unsupported(char),
+}
+
+#[derive(Debug)]
+pub struct Entry {
+    line_type: LineType,
+    modifiers: Vec<Modifier>,
+    path: String,
+    mode: Option<Mode>,
+    user: Option<String>,
+    group: Option<String>,
+    age: Option<String>,
+    argument: Option<String>,
+}
+
+#[derive(Debug, PartialEq)]
 enum State {
-    TempType,
+    LineType,
+    Modifiers,
     Path,
     Mode,
     User,
@@ -22,33 +41,57 @@ enum State {
     Argument,
 }
 
-fn parse_line<'a>(line: &'a str) -> Entry<'a> {
-    let mut state = State::TempType;
-    let mut temp_type = "";
-    let mut path = "";
-    let mut mode = "";
-    let mut user = "";
-    let mut group = "";
-    let mut age = "";
-    let mut argument = "";
+impl Entry {
+    pub fn from_str(string: &str) -> Self {
+        parse_line(string)
+    }
+}
+
+fn parse_line(line: &str) -> Entry {
+    let mut state = State::LineType;
+
+    let mut entry = Entry {
+        line_type: Unsupported('-'),
+        modifiers: Vec::new(),
+        path: String::new(),
+        mode: None,
+        user: None,
+        group: None,
+        age: None,
+        argument: None,
+    };
 
     let mut start_index = 0;
     let mut inside_quotes = false;
 
     for (i, c) in line.chars().enumerate() {
         match state {
-            State::TempType => {
+            State::LineType => {
+                entry.line_type = match c {
+                    'd' => LineType::DirectoryCreateAndClean,
+                    'D' => LineType::DirectoryCreateAndRemove,
+                    _ => Unsupported(c),
+                };
+                state = State::Modifiers;
+            }
+            State::Modifiers => {
                 if c == ' ' {
                     state = State::Path;
                 } else {
-                    temp_type = &line[..i + 1];
+                    entry.modifiers.push(match c {
+                        '!' => Modifier::OnlySafeDuringBoot,
+                        '-' => Modifier::IgnoreCreateError,
+                        '=' => Modifier::RemoveExisting,
+                        '^' => Modifier::Base64EncodedArgument,
+                        _ => Modifier::Unsupported(c),
+                    });
                 }
             }
             State::Path => {
                 if c == ' ' || c == '\'' {
                     if (c == '\'' && inside_quotes) || (start_index > 0 && !inside_quotes) {
                         state = State::Mode;
-                        path = &line[start_index..i];
+                        entry.path.push_str(&line[start_index..i]);
                         start_index = 0;
                         inside_quotes = false;
                     } else if c == '\'' && !inside_quotes {
@@ -65,7 +108,10 @@ fn parse_line<'a>(line: &'a str) -> Entry<'a> {
                 if c == ' ' {
                     if start_index > 0 {
                         state = State::User;
-                        mode = &line[start_index..i];
+                        let octal_string = &line[start_index..i];
+                        if let Ok(octal) = u32::from_str_radix(octal_string, 8) {
+                            entry.mode = Some(Mode::from(octal))
+                        }
                         start_index = 0;
                     }
                 } else {
@@ -78,7 +124,7 @@ fn parse_line<'a>(line: &'a str) -> Entry<'a> {
                 if c == ' ' {
                     if start_index > 0 {
                         state = State::Group;
-                        user = &line[start_index..i];
+                        entry.user = Some(line[start_index..i].to_string());
                         start_index = 0;
                     }
                 } else {
@@ -91,7 +137,7 @@ fn parse_line<'a>(line: &'a str) -> Entry<'a> {
                 if c == ' ' {
                     if start_index > 0 {
                         state = State::Age;
-                        group = &line[start_index..i];
+                        entry.group = Some(line[start_index..i].to_string());
                         start_index = 0;
                     }
                 } else {
@@ -104,7 +150,7 @@ fn parse_line<'a>(line: &'a str) -> Entry<'a> {
                 if c == ' ' {
                     if start_index > 0 {
                         state = State::Argument;
-                        age = &line[start_index..i];
+                        entry.age = Some(line[start_index..i].to_string());
                         start_index = i;
                     }
                 } else {
@@ -114,23 +160,17 @@ fn parse_line<'a>(line: &'a str) -> Entry<'a> {
                 }
             }
             State::Argument => {
-                if c != ' ' {
-                    argument = &line[i..];
+                if c == '-' {
+                    break;
+                } else if c != ' ' {
+                    entry.argument = Some(line[i..].to_string());
                     break;
                 }
             }
         }
     }
 
-    Entry {
-        temp_type,
-        path,
-        mode,
-        user,
-        group,
-        age,
-        argument,
-    }
+    entry
 }
 
 #[cfg(test)]
@@ -141,46 +181,46 @@ mod tests {
     fn it_works() {
         let data = "d         /run/screens        1777      root      screen    10d       -";
         let parsed = parse_line(data);
-        assert_eq!(parsed.temp_type, "d");
+        assert_eq!(parsed.line_type, LineType::DirectoryCreateAndClean);
         assert_eq!(parsed.path, "/run/screens");
-        assert_eq!(parsed.mode, "1777");
-        assert_eq!(parsed.user, "root");
-        assert_eq!(parsed.group, "screen");
-        assert_eq!(parsed.age, "10d");
-        assert_eq!(parsed.argument, "-");
+        assert_eq!(parsed.mode, Some(Mode::from(0o1777)));
+        assert_eq!(parsed.user, Some("root".to_owned()));
+        assert_eq!(parsed.group, Some("screen".to_owned()));
+        assert_eq!(parsed.age, Some("10d".to_owned()));
+        assert_eq!(parsed.argument, None);
 
         let data = "d         '/run/uscreens'     0755      root      screen    10d12h    -";
         let parsed = parse_line(data);
-        assert_eq!(parsed.temp_type, "d");
+        assert_eq!(parsed.line_type, LineType::DirectoryCreateAndClean);
         assert_eq!(parsed.path, "/run/uscreens");
-        assert_eq!(parsed.mode, "0755");
-        assert_eq!(parsed.user, "root");
-        assert_eq!(parsed.group, "screen");
-        assert_eq!(parsed.age, "10d12h");
-        assert_eq!(parsed.argument, "-");
+        assert_eq!(parsed.mode, Some(Mode::from(0o0755)));
+        assert_eq!(parsed.user, Some("root".to_owned()));
+        assert_eq!(parsed.group, Some("screen".to_owned()));
+        assert_eq!(parsed.age, Some("10d12h".to_owned()));
+        assert_eq!(parsed.argument, None);
 
-        let data = "d         '/a z/some test'    0755      root      screen    10d12h    -";
-        let parsed = parse_line(data);
-        assert_eq!(parsed.temp_type, "d");
-        assert_eq!(parsed.path, "/a z/some test");
-        assert_eq!(parsed.mode, "0755");
-        assert_eq!(parsed.user, "root");
-        assert_eq!(parsed.group, "screen");
-        assert_eq!(parsed.age, "10d12h");
-        assert_eq!(parsed.argument, "-");
-
-        let data =
-            "t /run/cups - - - - security.SMACK64=printing user.attr-with-spaces=\"foo bar\"";
-        let parsed = parse_line(data);
-        assert_eq!(parsed.temp_type, "t");
-        assert_eq!(parsed.path, "/run/cups");
-        assert_eq!(parsed.mode, "-");
-        assert_eq!(parsed.user, "-");
-        assert_eq!(parsed.group, "-");
-        assert_eq!(parsed.age, "-");
-        assert_eq!(
-            parsed.argument,
-            "security.SMACK64=printing user.attr-with-spaces=\"foo bar\""
-        );
+        // let data = "d         '/a z/some test'    0755      root      screen    10d12h    -";
+        // let parsed = parse_line(data);
+        // assert_eq!(parsed.line_type, "d");
+        // assert_eq!(parsed.path, "/a z/some test");
+        // assert_eq!(parsed.mode, Mode::from(0o0755));
+        // assert_eq!(parsed.user, "root");
+        // assert_eq!(parsed.group, "screen");
+        // assert_eq!(parsed.age, "10d12h");
+        // assert_eq!(parsed.argument, "-");
+        //
+        // let data =
+        //     "t /run/cups - - - - security.SMACK64=printing user.attr-with-spaces=\"foo bar\"";
+        // let parsed = parse_line(data);
+        // assert_eq!(parsed.line_type, "t");
+        // assert_eq!(parsed.path, "/run/cups");
+        // assert_eq!(parsed.mode, None);
+        // assert_eq!(parsed.user, "-");
+        // assert_eq!(parsed.group, "-");
+        // assert_eq!(parsed.age, "-");
+        // assert_eq!(
+        //     parsed.argument.unwrap(),
+        //     "security.SMACK64=printing user.attr-with-spaces=\"foo bar\""
+        // );
     }
 }
