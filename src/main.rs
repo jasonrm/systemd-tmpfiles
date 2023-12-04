@@ -3,7 +3,7 @@ use std::fs;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
-use systemd_tmpfile::{Entry, LineType};
+use systemd_tmpfiles::{Entry, LineType};
 use tracing::info;
 
 /// Creates, deletes and cleans up volatile and temporary files and directories
