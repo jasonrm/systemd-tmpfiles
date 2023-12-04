@@ -44,7 +44,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     let opts = Options::parse();
-    info!("opts: {:?}", opts);
 
     let entries = entries_from_config_files(opts.config_file);
     for entry in entries {
@@ -57,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
             if !has_allowed_prefix {
                 info!(
-                    "Skipping entry {} because it doesn't start with an allowed prefix",
+                    "Skipping entry {} because it doesn't start with an allowed prefix.",
                     entry.path().display()
                 );
                 continue;
@@ -66,11 +65,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if *entry.line_type() == LineType::DirectoryCreateAndClean {
             fs::create_dir_all(entry.path())?;
             info!("Created directory {}", entry.path().display());
+        } else {
+            info!("Skipping unsupported entry {}", entry.path().display());
         }
-        info!("{:?}", entry);
     }
-
-    info!("Done!");
     Ok(())
 }
 
@@ -78,6 +76,7 @@ fn entries_from_config_files(config_files: Vec<PathBuf>) -> impl Iterator<Item =
     config_files
         .into_iter()
         .flat_map(|config_file| {
+            info!("Processing config file {}", config_file.display());
             if let Ok(file) = File::open(&config_file) {
                 let reader = io::BufReader::new(file);
                 Some(reader.lines().filter_map(|line| {
