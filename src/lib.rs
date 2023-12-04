@@ -1,4 +1,5 @@
 use file_mode::Mode;
+use std::path::PathBuf;
 
 #[derive(Debug, PartialEq)]
 pub enum LineType {
@@ -20,7 +21,7 @@ pub enum Modifier {
 pub struct Entry {
     line_type: LineType,
     modifiers: Vec<Modifier>,
-    path: String,
+    path: PathBuf,
     mode: Option<Mode>,
     user: Option<String>,
     group: Option<String>,
@@ -44,6 +45,31 @@ impl Entry {
     pub fn from_str(string: &str) -> Self {
         parse_line(string)
     }
+    pub fn line_type(&self) -> &LineType {
+        &self.line_type
+    }
+
+    pub fn modifiers(&self) -> &Vec<Modifier> {
+        &self.modifiers
+    }
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+    pub fn mode(&self) -> &Option<Mode> {
+        &self.mode
+    }
+    pub fn user(&self) -> &Option<String> {
+        &self.user
+    }
+    pub fn group(&self) -> &Option<String> {
+        &self.group
+    }
+    pub fn age(&self) -> &Option<String> {
+        &self.age
+    }
+    pub fn argument(&self) -> &Option<String> {
+        &self.argument
+    }
 }
 
 fn parse_line(line: &str) -> Entry {
@@ -52,7 +78,7 @@ fn parse_line(line: &str) -> Entry {
     let mut entry = Entry {
         line_type: LineType::Unsupported('-'),
         modifiers: Vec::new(),
-        path: String::new(),
+        path: PathBuf::new(),
         mode: None,
         user: None,
         group: None,
@@ -90,7 +116,7 @@ fn parse_line(line: &str) -> Entry {
                 if c == ' ' || c == '\'' {
                     if (c == '\'' && inside_quotes) || (start_index > 0 && !inside_quotes) {
                         state = State::Mode;
-                        entry.path.push_str(&line[start_index..i]);
+                        entry.path.push(&line[start_index..i]);
                         start_index = 0;
                         inside_quotes = false;
                     } else if c == '\'' && !inside_quotes {
@@ -185,6 +211,12 @@ fn parse_line(line: &str) -> Entry {
         }
     }
 
+    // Hack to handle the only a line type and path
+    // TODO: rewrite parsing
+    if state == State::Path {
+        entry.path.push(&line[start_index..]);
+    }
+
     entry
 }
 
@@ -197,7 +229,7 @@ mod tests {
         let data = "d         /run/screens        1777      root      screen    10d       -";
         let parsed = parse_line(data);
         assert_eq!(parsed.line_type, LineType::DirectoryCreateAndClean);
-        assert_eq!(parsed.path, "/run/screens");
+        assert_eq!(parsed.path, PathBuf::from("/run/screens"));
         assert_eq!(parsed.mode, Some(Mode::from(0o1777)));
         assert_eq!(parsed.user, Some("root".to_owned()));
         assert_eq!(parsed.group, Some("screen".to_owned()));
@@ -207,7 +239,7 @@ mod tests {
         let data = "d         '/run/uscreens'     0755      root      screen    10d12h    -";
         let parsed = parse_line(data);
         assert_eq!(parsed.line_type, LineType::DirectoryCreateAndClean);
-        assert_eq!(parsed.path, "/run/uscreens");
+        assert_eq!(parsed.path, PathBuf::from("/run/uscreens"));
         assert_eq!(parsed.mode, Some(Mode::from(0o0755)));
         assert_eq!(parsed.user, Some("root".to_owned()));
         assert_eq!(parsed.group, Some("screen".to_owned()));
@@ -217,7 +249,7 @@ mod tests {
         let data = "d         '/a z/some test'    0755      root      screen    10d12h    -";
         let parsed = parse_line(data);
         assert_eq!(parsed.line_type, LineType::DirectoryCreateAndClean);
-        assert_eq!(parsed.path, "/a z/some test");
+        assert_eq!(parsed.path, PathBuf::from("/a z/some test"));
         assert_eq!(parsed.mode, Some(Mode::from(0o0755)));
         assert_eq!(parsed.user, Some("root".to_owned()));
         assert_eq!(parsed.group, Some("screen".to_owned()));
@@ -228,7 +260,7 @@ mod tests {
             "t /run/cups - - - - security.SMACK64=printing user.attr-with-spaces=\"foo bar\"";
         let parsed = parse_line(data);
         assert_eq!(parsed.line_type, LineType::Unsupported('t'));
-        assert_eq!(parsed.path, "/run/cups");
+        assert_eq!(parsed.path, PathBuf::from("/run/cups"));
         assert_eq!(parsed.mode, None);
         assert_eq!(parsed.user, None);
         assert_eq!(parsed.group, None);
@@ -237,5 +269,18 @@ mod tests {
             parsed.argument.unwrap(),
             "security.SMACK64=printing user.attr-with-spaces=\"foo bar\""
         );
+        let data = "r! /var/cache/dnf/*/*/download_lock.pid";
+        let parsed = parse_line(data);
+        assert_eq!(parsed.line_type, LineType::Unsupported('r'));
+        assert_eq!(parsed.modifiers, vec![Modifier::OnlySafeDuringBoot]);
+        assert_eq!(
+            parsed.path,
+            PathBuf::from("/var/cache/dnf/*/*/download_lock.pid")
+        );
+        assert_eq!(parsed.mode, None);
+        assert_eq!(parsed.user, None);
+        assert_eq!(parsed.group, None);
+        assert_eq!(parsed.age, None);
+        assert_eq!(parsed.argument, None);
     }
 }

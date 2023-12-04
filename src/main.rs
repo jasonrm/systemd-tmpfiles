@@ -1,8 +1,9 @@
 use clap::Parser;
+use std::fs;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
-use systemd_tmpfile_rs::Entry;
+use systemd_tmpfile::{Entry, LineType};
 use tracing::info;
 
 /// Creates, deletes and cleans up volatile and temporary files and directories
@@ -31,10 +32,6 @@ struct Options {
     #[arg(long)]
     prefix: Vec<PathBuf>,
 
-    /// All paths will be prefixed with the given alternate root path.
-    #[arg(long)]
-    root: Option<PathBuf>,
-
     /// Configuration file.
     ///
     /// If one or more filenames are passed on the command line, only the directives in these files
@@ -51,6 +48,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let entries = entries_from_config_files(opts.config_file);
     for entry in entries {
+        if !opts.prefix.is_empty() {
+            let has_allowed_prefix = opts.prefix.iter().any(|prefix| {
+                if entry.path().starts_with(prefix) {
+                    return true;
+                }
+                false
+            });
+            if !has_allowed_prefix {
+                info!(
+                    "Skipping entry {} because it doesn't start with an allowed prefix",
+                    entry.path().display()
+                );
+                continue;
+            }
+        }
+        if *entry.line_type() == LineType::DirectoryCreateAndClean {
+            fs::create_dir_all(entry.path())?;
+            info!("Created directory {}", entry.path().display());
+        }
         info!("{:?}", entry);
     }
 

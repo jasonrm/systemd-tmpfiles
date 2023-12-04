@@ -329,8 +329,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "systemd-tmpfile-rs"
-version = "1.0.0"
+name = "systemd-tmpfile"
+version = "0.1.0"
 dependencies = [
  "clap",
  "env_logger",

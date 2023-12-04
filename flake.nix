@@ -35,7 +35,7 @@
       in
       {
         defaultPackage = naerskLib.buildPackage {
-          pname = "systemd-tmpfile-rs";
+          pname = "systemd-tmpfile";
           root = ./.;
           nativeBuildInputs = nativeBuildInputs;
         };
@@ -51,11 +51,7 @@
             bashInteractive
             rustfmt
             cargo-flamegraph
-          ] ++ (lib.optionals stdenv.isDarwin (with pkgs; with darwin.apple_sdk.frameworks; [
-            iconv
-            Security
-            SystemConfiguration
-          ]));
+         ];
 
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
         };
