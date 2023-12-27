@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 use systemd_tmpfiles::{Entry, LineType};
-use tracing::info;
+use tracing::warn;
 
 /// Creates, deletes and cleans up volatile and temporary files and directories
 ///
@@ -55,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 false
             });
             if !has_allowed_prefix {
-                info!(
+                warn!(
                     "Skipping entry {} because it doesn't start with an allowed prefix.",
                     entry.path().display()
                 );
@@ -64,9 +64,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         if *entry.line_type() == LineType::DirectoryCreateAndClean {
             fs::create_dir_all(entry.path())?;
-            info!("Created directory {}", entry.path().display());
         } else {
-            info!("Skipping unsupported entry {}", entry.path().display());
+            warn!("Skipping unsupported entry {}", entry.path().display());
         }
     }
     Ok(())
@@ -76,7 +75,6 @@ fn entries_from_config_files(config_files: Vec<PathBuf>) -> impl Iterator<Item =
     config_files
         .into_iter()
         .flat_map(|config_file| {
-            info!("Processing config file {}", config_file.display());
             if let Ok(file) = File::open(&config_file) {
                 let reader = io::BufReader::new(file);
                 Some(reader.lines().filter_map(|line| {
