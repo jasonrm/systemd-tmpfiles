@@ -1,10 +1,11 @@
 use clap::Parser;
+use env_logger::Env;
+use log::warn;
 use std::fs;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 use systemd_tmpfiles::{Entry, LineType};
-use tracing::warn;
 
 /// Creates, deletes and cleans up volatile and temporary files and directories
 ///
@@ -41,7 +42,9 @@ struct Options {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
+    env_logger::Builder::from_env(Env::default().default_filter_or("warn"))
+        .format_timestamp(None)
+        .init();
 
     let opts = Options::parse();
 
@@ -56,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
             if !has_allowed_prefix {
                 warn!(
-                    "Skipping entry {} because it doesn't start with an allowed prefix.",
+                    "Skipping entry because it doesn't start with an allowed prefix: {}",
                     entry.path().display()
                 );
                 continue;
